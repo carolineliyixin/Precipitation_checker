@@ -21,6 +21,7 @@ summary(tmin1)
 graph_china = shapefile("data/gadm36_CHN_shp/gadm36_CHN_0.shp")
 graph_china
 graph_china$tmin1 <- extract(x = tmin1, y = graph_china)
+summary(graph_china$tmin1)
 class(graph_china$tmin1)
 new = as.data.frame(graph_china$tmin1)
 new
@@ -87,4 +88,28 @@ if (input$tabs=="Import File"){
 
 
 
+list.ras <- mixedsort(list.files("data/wc10", full.names = T, 
+                                 pattern = ".bil$"))
+tmin.all <- stack(list.ras)
+month = list(new_file[3])
+a = as.character(month==1)
+month_to_calculate <- tmin.all[[paste("tmin",a, sep = "")]]
+
+
+
+new_file = read.csv("x.csv",header = F, sep = ",")
+new_file
+long = new_file[1]
+long
+lat = new_file[2]
+
+a <- as.data.frame(cbind(long,lat))
+a
+coordinates(a) = c("V1","V2")
+proj4string(a) = CRS("+proj=longlat +ellps=WGS84 +datum=WGS84")
+
+month_to_calculate <- tmin.all[[paste("tmin",a, sep = "")]]
+
+a = c(1,2,3)
+a[1]
 

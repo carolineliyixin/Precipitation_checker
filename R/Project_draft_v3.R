@@ -23,7 +23,7 @@ tmin.all <- stack(list.ras)
 checkData <- function(list1,list2){
   for (i in range(length(list1))){
     #(list1[i] != -999 | list2[i] != -999) |
-    if ( (list1[i] > 90 | list1[i] < -90 | list2[i] > 180 | list2[i] < -180)){
+    if ( (list1[i] > 180 | list1[i] < -180 | list2[i] > 90 | list2[i] < -90)){
       return ("Invalid coordinates!")
       break
     }
@@ -47,12 +47,12 @@ if (interactive()) {
                                           "NAD83 (EPSG:4269)" = 2,
                                           "NAD27 (EPSG: 4267)" = 3,
                                           "Mercator (EPSG: 3857)" = 4), selected = 1),
-               numericInput("longitude1","Longtitude 1", 30, min = -90, max = 90),
-               numericInput("latitude1", "latitude 1", 40, min = -180, max = 180),
-               numericInput("longitude2", "Longtitude 2", -999, min = -90, max = 90),
-               numericInput("latitude2", "latitude 2", -999, min = -180, max = 180),
-               numericInput("longitude3", "Longtitude 3", -999, min = -90, max = 90),
-               numericInput("latitude3","latitude 3", -999, min = -180, max = 180),
+               numericInput("longitude1","Longtitude 1", 30, min = -180, max = 180),
+               numericInput("latitude1", "latitude 1", 40, min = -90, max = 90),
+               numericInput("longitude2", "Longtitude 2", -999, min = -180, max = 180),
+               numericInput("latitude2", "latitude 2", -999, min = -90, max = 90),
+               numericInput("longitude3", "Longtitude 3", -999, min = -180, max = 180),
+               numericInput("latitude3","latitude 3", -999, min = -90, max = 90),
                
                h2(textOutput("error")),
                 
@@ -84,25 +84,18 @@ if (interactive()) {
              ),
              mainPanel(
                verbatimTextOutput("valueForNames"),
-               plotOutput(outputId = "distPlot")
+               plotOutput(outputId = "distPlot"),
+               textOutput("serverTime")
              )
     ),
-    tabPanel("country name",
+    tabPanel("Load File",
              fileInput("input_file", 
                        "If your data is stored in csv, upload it here", 
-                       multiple=TRUE)
-    ),
-    verbatimTextOutput("server"),
-    tags$script('
-                $(document).ready(function(){
-                var d = new Date();
-                var target = $("#clientTime");
-                target.val(d.toLocaleString());
-                target.trigger("change");
-                });
-                '),
-    textInput("clientTime", "Client Time", value = ""),
-    verbatimTextOutput("local")
+                       multiple=TRUE),
+             
+             tableOutput("table2")
+             
+    )
     
     
   )
@@ -112,6 +105,23 @@ if (interactive()) {
     list.ras <- mixedsort(list.files("data/wc10", full.names = T, 
                                      pattern = ".bil$"))
     tmin.all <- stack(list.ras)
+    
+    
+    crs_chosen <- function(crsName){
+      if (crsName == "WGS84 (EPSG: 4326)"){
+        proj4string(a) = CRS("+proj=longlat +ellps=WGS84 +datum=WGS84")
+      }
+      else if (crsName == "NAD83 (EPSG:4269)"){
+        proj4string(a) = CRS("+init=epsg:4269")
+      }
+      else if (crsName == "NAD27 (EPSG: 4267)"){
+        proj4string(a) = CRS("+init=epsg:4267")
+      }
+      else if (crsName == "Mercator (EPSG: 3857)"){
+        proj4string(a) = CRS("+init=epsg:3857")
+      }
+     
+    }
     
     ############################################################################
     #################### if user provided the country name ####################
@@ -126,18 +136,25 @@ if (interactive()) {
       extracted_value <- extract(x = month_to_calculate, y = new_country)
       mean(extracted_value[[1]])
       
-      output$downloadData <- downloadHandler(
-        write.csv(as.data.frame(mean(extracted_value[[1]])),file = "x.csv")
-      )
       
     })
+    output$valueForNames <- renderText({ df_name() })
     
     output$distPlot <- renderPlot({
       month_to_calculate <- tmin.all[[paste("tmin",as.character(input$input_month), sep = "")]]
       plot(month_to_calculate)
-      
     })
-    output$valueForNames <- renderText({ df_name() })
+    
+
+    
+    output$downloadData <- downloadHandler(
+      filename = function() {
+        paste("Percipitation in ", ".csv", sep = "")
+      },
+      content = function(file) {
+        write.table(as.data.frame(df_name()), file, row.names = FALSE)
+      }
+    )
     
     ############################################################################
     #################### if user provided the coordinates  #####################
@@ -163,18 +180,9 @@ if (interactive()) {
       output$error <- renderText({ recheck_click() })
       
       coordinates(selected_input_coordinates) = c("input_longtitudes","input_latitudes")
-      if (input$select_CRS == "WGS84 (EPSG: 4326)"){
-        proj4string(selected_input_coordinates) = CRS("+proj=longlat +ellps=WGS84 +datum=WGS84")
-      }
-      else if (input$select_CRS == "NAD83 (EPSG:4269)"){
-        proj4string(selected_input_coordinates) = CRS("+init=epsg:4269")
-      }
-      else if (input$select_CRS == "NAD27 (EPSG: 4267)"){
-        proj4string(selected_input_coordinates) = CRS("+init=epsg:4267")
-      }
-      else if (input$select_CRS == "Mercator (EPSG: 3857)"){
-        proj4string(selected_input_coordinates) = CRS("+init=epsg:3857")
-      }
+      
+      crs_chosen(input$select_CRS)
+      
       extracted_value <- extract(x = month_to_calculate, y = selected_input_coordinates)
       mean(extracted_value, na.rm = TRUE)
     })
@@ -202,33 +210,28 @@ if (interactive()) {
       
       a = selected_input_coordinates
       coordinates(a) = c("Longtitudes","Latitudes")
-      if (input$select_CRS == "WGS84 (EPSG: 4326)"){
-        proj4string(a) = CRS("+proj=longlat +ellps=WGS84 +datum=WGS84")
-      }
-      else if (input$select_CRS == "NAD83 (EPSG:4269)"){
-        proj4string(a) = CRS("+init=epsg:4269")
-      }
-      else if (input$select_CRS == "NAD27 (EPSG: 4267)"){
-        proj4string(a) = CRS("+init=epsg:4267")
-      }
-      else if (input$select_CRS == "Mercator (EPSG: 3857)"){
-        proj4string(a) = CRS("+init=epsg:3857")
-      }
+      
+      crs_chosen(input$select_CRS)
+      
       precipitation <- extract(x = month_to_calculate, y = a)
       as.data.frame(precipitation)
       
       resolutions <- res(tmin.all)
       user_input <- selected_input_coordinates
-      outputs <- c("variable one", "time", resolutions[1], resolution[2], "WGS84 (EPSG: 4326)", input$select_CRS, user_input, "points", "queried_condition")
-      write.csv(outputs,file = "example.csv")
+      servertime = paste("Server time:", as.character(Sys.time()), as.character(Sys.timezone()),sep = "")
+      outputs <- as.data.frame(c("variable one", servertime, resolutions[1], resolutions[2], "WGS84 (EPSG: 4326)", input$select_CRS, user_input, "points", "queried_condition"))
+      
+      Temp_path <- "temp/"
+      if(! file.exists(Temp_path)  ){
+        dir.create(Temp_path)
+      }
+      num = sample(1:10000,1)
+      My_filename <-  paste(Temp_path,as.character(Sys.time()),as.character(num),".csv")
+      write.csv(outputs,file = My_filename)
       
       
       informationOutputsTable <- cbind(selected_input_coordinates, precipitation)
       informationOutputsTable
-      
-      
-      
-      
       
       
     })
@@ -239,23 +242,31 @@ if (interactive()) {
     
     ############################################################################
     ####################### if user provided a csv file  #######################
+
+    df_tableGenerator2 <- eventReactive(input$input_file, {
+      #new_file = read.csv(input$input_file,header = F, sep = ",")
+      new_file = read.csv(input$input_file$datapath,header = F, sep = ",")
+      
+      long = new_file[1]
+      lat = new_file[2]
+      #month = list(new_file[3])
+      #a = as.character(month==1)
+
+      thedata <- as.data.frame(cbind(long,lat))
+      coordinates(thedata) = c("V1","V2")
+      proj4string(thedata) = CRS("+proj=longlat +ellps=WGS84 +datum=WGS84")
+
+      month_to_calculate <- tmin.all[[paste("tmin","2", sep = "")]]
+      precipitation <- extract(x = month_to_calculate, y = thedata)
+      as.data.frame(precipitation)
+       
+    })
+    output$table2 <- renderTable({ df_tableGenerator2() })
+
+    output$serverTime <- renderText({ 
+      paste("Server time:", as.character(Sys.time()), as.character(Sys.timezone()),sep = "") 
+    })
     
-    ##
-    #new_file = read.csv(input$input_file,header = T, strip.white = T, sep = ",")
-    
-    
-    
-    
-    
-    output$local <- renderText({
-      a = tags$script
-      a})
-    
-    
-    
-    #output$server <- renderText({ c("Server time:", as.character(Sys.time()), as.character(Sys.timezone())) })
-    #session$userData$time <- reactive({format(lubridate::mdy_hms(as.character(input$clientTime)), "%d/%m/%Y; %H:%M:%S")})
-    #output$local <- renderText({session$userData$time() })
   }
   shinyApp(ui, server)
 }
