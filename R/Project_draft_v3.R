@@ -57,7 +57,8 @@ if (interactive()) {
                h2(textOutput("error")),
                 
                actionButton("do_coordinates","get the mean value of precipitation!",class = "btn-primary"),
-               actionButton("do_coordinatesTable","get the table!",class = "btn-primary")
+               actionButton("do_coordinatesTable","get the table!",class = "btn-primary"),
+               downloadLink('downloadCoord', 'Download')
              ),
              mainPanel(
                verbatimTextOutput("valueForCoords"),
@@ -126,7 +127,7 @@ if (interactive()) {
     ############################################################################
     #################### if user provided the country name ####################
     
-    df_name <- eventReactive(input$do_countryname, {
+    df_countryname <- eventReactive(input$do_countryname, {
       
       # extract all of the minimum temperature for a specific month for every country
       month_to_calculate <- tmin.all[[paste("tmin",as.character(input$input_month), sep = "")]]
@@ -138,7 +139,7 @@ if (interactive()) {
       
       
     })
-    output$valueForNames <- renderText({ df_name() })
+    output$valueForNames <- renderText({ df_countryname() })
     
     output$distPlot <- renderPlot({
       month_to_calculate <- tmin.all[[paste("tmin",as.character(input$input_month), sep = "")]]
@@ -146,13 +147,29 @@ if (interactive()) {
     })
     
 
-    
+    df_countrynameDownload <- eventReactive(input$do_countryname, {
+      
+      # extract all of the minimum temperature for a specific month for every country
+      month_to_calculate <- tmin.all[[paste("tmin",as.character(input$input_month), sep = "")]]
+      
+      # Get the extract value for a specfic month and a specific country
+      new_country <- subset(county, county$CNTRY_NAME == input$input_country)
+      extracted_value <- extract(x = month_to_calculate, y = new_country)
+      meanvalue = mean(extracted_value[[1]])
+      resolutions = res(month_to_calculate)
+      
+##!!!!!!!!!!!!!
+      outputs <- as.data.frame("country" = input$input_country, c(resolutions[1]), c(resolutions[2]), c("WGS84 (EPSG: 4326)"), c(paste("mean value = ", meanvalue)))
+      
+      #outputs
+    })
+
     output$downloadData <- downloadHandler(
       filename = function() {
         paste("Percipitation in ", ".csv", sep = "")
       },
       content = function(file) {
-        write.table(as.data.frame(df_name()), file, row.names = FALSE)
+        write.table((df_countrynameDownload()), file, row.names = FALSE,eol = "\n")
       }
     )
     
@@ -168,11 +185,10 @@ if (interactive()) {
       input_latitudes <- c(input$latitude1,
                            input$latitude2,
                            input$latitude3)
-      input_coordinates <- as.data.frame( cbind(input_longtitudes,input_latitudes) )
+      input_coordinates <- as.data.frame(cbind(input_longtitudes,input_latitudes))
       selected_input_coordinates <- input_coordinates[which(input_coordinates$input_longtitudes!=-999
                                                             & input_coordinates$input_latitudes!=-999),]
       
-      ####################       check if the user input is valid.     #######################
       recheck_click <- eventReactive(input$do_coordinates,{
         validate(checkData(selected_input_coordinates$input_longtitudes,selected_input_coordinates$input_latitudes))
       }
@@ -180,13 +196,63 @@ if (interactive()) {
       output$error <- renderText({ recheck_click() })
       
       coordinates(selected_input_coordinates) = c("input_longtitudes","input_latitudes")
-      
       crs_chosen(input$select_CRS)
+      extracted_value <- extract(month_to_calculate, selected_input_coordinates)
+      a = mean(extracted_value)
+ 
+      resolutions <- res(tmin.all)
+      user_input <- selected_input_coordinates
+      servertime = paste("Server time:", as.character(Sys.time()), as.character(Sys.timezone()),sep = "")
+      outputs <- data.frame(      "fakevariable" = rep("variable one",length(extracted_value)),
+                                     "time" = rep(servertime,length(extracted_value)),
+                                     "resolution_x" = rep(resolutions[1],length(extracted_value)),
+                                     "resolution_y" = rep(resolutions[2],length(extracted_value)),
+                                     "extracted_value" = extracted_value)
+
+                               #"WGS84 (EPSG: 4326)",input$select_CRS, user_input, "points"
+      Temp_path <- "temp/"
+      num = sample(1:10000,1)
+      My_filename <-  paste(Temp_path,as.character(Sys.time()),as.character(num),".csv")
+      write.csv(outputs,file = My_filename)
+# #########      
+      df_coordDownload <- eventReactive(input$do_coordinates, {
+        #outputs <- cbind(selected_input_coordinates, resolutions[1], resolutions[2], extracted_value)
+        #outputs
+      })
+      output$downloadCoord <- downloadHandler(
+        filename = function() {
+          paste("tester", ".csv", sep = "")
+        },
+        content = function(file) {
+          write.csv(outputs, file, row.names = FALSE,eol = "\n")
+        }
+      )
       
-      extracted_value <- extract(x = month_to_calculate, y = selected_input_coordinates)
+      
+      
       mean(extracted_value, na.rm = TRUE)
     })
     output$valueForCoords <- renderText({ df_coord() })
+    
+#############
+    # df_coordDownload <- eventReactive(input$do_coordinates, {
+    #   # extract all of the minimum temperature for a specific month for every country
+    #   month_to_calculate <- tmin.all[[paste("tmin",as.character(input$input_month), sep = "")]]
+    #   
+    #   resolutions = res(month_to_calculate)
+    #   outputs <- c(input$do_countryname, resolutions[1], resolutions[2], "WGS84 (EPSG: 4326)", paste("mean value = ", meanvalue))
+    #   #outputs
+    # })
+    
+    # output$downloadData <- downloadHandler(
+    #   filename = function() {
+    #     paste("Percipitation in ", ".csv", sep = "")
+    #   },
+    #   content = function(file) {
+    #     write.table(as.data.frame(df_countrynameTable()), file, row.names = FALSE,eol = "\n")
+    #   }
+    # )
+    
     
     
     
@@ -219,7 +285,7 @@ if (interactive()) {
       resolutions <- res(tmin.all)
       user_input <- selected_input_coordinates
       servertime = paste("Server time:", as.character(Sys.time()), as.character(Sys.timezone()),sep = "")
-      outputs <- as.data.frame(c("variable one", servertime, resolutions[1], resolutions[2], "WGS84 (EPSG: 4326)", input$select_CRS, user_input, "points", "queried_condition"))
+      outputs <- as.data.frame(c("variable one", servertime, resolutions[1], resolutions[2], "WGS84 (EPSG: 4326)", input$select_CRS, user_input, "points", "do_coordinatesTable"))
       
       Temp_path <- "temp/"
       if(! file.exists(Temp_path)  ){
